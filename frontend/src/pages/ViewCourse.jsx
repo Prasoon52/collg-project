@@ -204,9 +204,11 @@ setIsEnrolled(true)
                 ⭐ {avgRating} <span className="text-gray-500">(1,200 reviews)</span>
               </div>
               <div>
-                <span className="text-lg font-semibold text-black">{selectedCourseData?.price}</span>{" "}
-                <span className="line-through text-sm text-gray-400">₹599</span>
-              </div>
+    {/* Only show the actual dynamic price from your database */}
+    <span className="text-lg font-semibold text-black">
+        {selectedCourseData?.price ? `₹${selectedCourseData.price}` : "Free"}
+    </span>
+</div>
             </div>
 
             {/* Highlights */}
