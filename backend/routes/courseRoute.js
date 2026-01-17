@@ -15,6 +15,7 @@ import {
 } from "../controllers/courseController.js";
 import upload from "../middlewares/multer.js";
 
+
 let courseRouter = express.Router();
 
 // COURSE ROUTES
@@ -24,6 +25,7 @@ courseRouter.get("/getcreatorcourses", isAuth, getCreatorCourses);
 courseRouter.post("/editcourse/:courseId", isAuth, upload.single("thumbnail"), editCourse);
 courseRouter.get("/getcourse/:courseId", isAuth, getCourseById);
 courseRouter.delete("/removecourse/:courseId", isAuth, removeCourse);
+
 
 // LECTURE ROUTES
 courseRouter.post("/createlecture/:courseId", isAuth, createLecture);

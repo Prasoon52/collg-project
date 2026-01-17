@@ -56,6 +56,14 @@ function ViewLecture() {
   const watchedSecondsRef = useRef(new Set());
   const lastSecondRef = useRef(-1);
   const viewSentRef = useRef(false);
+  
+  // ✅ FIX: Ref to prevent overlapping API calls (Reduces Lag)
+  const isSendingFrameRef = useRef(false);
+  const [downloadLoading, setDownloadLoading] = useState({
+    video: false,
+    audio: false,
+    pdf: false
+  });
 
   // Fetch course data on component mount
   useEffect(() => {
@@ -65,12 +73,14 @@ function ViewLecture() {
         // Try to get course from Redux first
         const courseFromRedux = courseData?.find((course) => course._id === courseId);
         
-        if (courseFromRedux) {
+        // CHECK: Ensure creator is populated (is an object, not just an ID string)
+        if (courseFromRedux && typeof courseFromRedux.creator === 'object') {
           setSelectedCourse(courseFromRedux);
           setLectures(courseFromRedux.lectures || []);
           setSelectedLecture(courseFromRedux.lectures?.[0] || null);
+          setLoading(false);
         } else {
-          // If not in Redux, fetch from API
+          // If Redux is missing data or creator is just an ID, fetch from API
           const response = await axios.get(
             `${serverUrl}/api/course/getcourse/${courseId}`,
             { withCredentials: true }
@@ -78,9 +88,9 @@ function ViewLecture() {
           setSelectedCourse(response.data);
           setLectures(response.data.lectures || []);
           setSelectedLecture(response.data.lectures?.[0] || null);
+          setLoading(false);
         }
         
-        setLoading(false);
       } catch (error) {
         console.error("Failed to fetch course data:", error);
         toast.error("Failed to load course");
@@ -115,24 +125,45 @@ function ViewLecture() {
     if (!webcamRef.current || !mediaRef.current) return;
     if (!selectedLecture?._id) return;
     if (mediaRef.current.paused || mediaRef.current.ended) return;
+    
+    // ✅ Skip if video is buffering or not ready
+    if (mediaRef.current.readyState < 2) return;
 
-    const imageSrc = webcamRef.current.getScreenshot();
-    if (!imageSrc || imageSrc.length < 1000) return;
-
-    const blob = await fetch(imageSrc).then((res) => res.blob());
-    if (!blob || blob.size === 0) return;
-
-    const form = new FormData();
-    form.append("frame", blob);
-    form.append("lectureId", selectedLecture._id);
+    // ✅ FIX: Prevent stacking requests if network is slow
+    if (isSendingFrameRef.current) return;
+    isSendingFrameRef.current = true;
 
     try {
+      // ✅ Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const imageSrc = webcamRef.current.getScreenshot();
+      if (!imageSrc || imageSrc.length < 1000) {
+        clearTimeout(timeoutId);
+        return;
+      }
+
+      const blob = await fetch(imageSrc).then((res) => res.blob());
+      if (!blob || blob.size === 0) {
+        clearTimeout(timeoutId);
+        return;
+      }
+
+      const form = new FormData();
+      form.append("frame", blob, `frame-${Date.now()}.jpg`);
+      form.append("lectureId", selectedLecture._id);
+
       const res = await axios.post(`${serverUrl}/api/attention/frame`, form, {
         withCredentials: true,
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       const temporal = res.data.temporal;
 
       if (!temporal) return;
+      
       if (!temporal.calibrated) {
         setCalibrating(true);
         return;
@@ -141,26 +172,33 @@ function ViewLecture() {
       setCalibrating(false);
       setAttentionScore(temporal.attention ?? null);
       
-      // Send attention analytics
-      await axios.post(
-        `${serverUrl}/api/analytics/attention`,
-        {
-          lectureId: selectedLecture._id,
-          t: Math.floor(mediaRef.current.currentTime),
-          score: temporal.attention,
-        },
-        { withCredentials: true }
-      );
-      
-      if (temporal.state === "NOT_ATTENTIVE") {
-        setLowCount((c) => c + 1);
-        setHighCount(0);
-      } else {
-        setHighCount((c) => c + 1);
-        setLowCount(0);
+      // Only send analytics if attention score is valid
+      if (temporal.attention !== null && temporal.attention !== undefined) {
+        await axios.post(
+          `${serverUrl}/api/analytics/attention`,
+          {
+            lectureId: selectedLecture._id,
+            t: Math.floor(mediaRef.current.currentTime),
+            score: temporal.attention,
+          },
+          { withCredentials: true }
+        );
+        
+        if (temporal.state === "NOT_ATTENTIVE") {
+          setLowCount((c) => c + 1);
+          setHighCount(0);
+        } else {
+          setHighCount((c) => c + 1);
+          setLowCount(0);
+        }
       }
     } catch (err) {
-      console.error("Frame error:", err);
+      if (err.name !== 'AbortError') {
+        console.error("Frame error:", err);
+      }
+    } finally {
+      // Release lock
+      isSendingFrameRef.current = false;
     }
   };
 
@@ -254,36 +292,69 @@ function ViewLecture() {
   // Send frame every second
   useEffect(() => {
     const interval = setInterval(sendFrame, 1000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      isSendingFrameRef.current = false; // Reset the ref
+    };
   }, [selectedLecture, viewMode]);
 
-  // FIXED: Download handler with PDF extension fix
-  const handleDownload = (url, type, filename) => {
+  // ✅ FIXED: Download Handler for ALL Types (Video, Audio, PDF)
+  const handleDownload = async (url, type, filename) => {
     if (!url) {
       toast.error(`No ${type} available for download`);
       return;
     }
 
-    const link = document.createElement('a');
-    link.href = url;
+    setDownloadLoading(prev => ({ ...prev, [type]: true }));
     
-    // Ensure PDF files have .pdf extension
-    if (type === 'pdf' && !filename.toLowerCase().endsWith('.pdf')) {
-      filename = `${filename}.pdf`;
+    try {
+      toast.info(`Preparing ${type} download...`);
+      
+      let downloadUrl = url;
+      
+      // For Cloudinary files, ensure proper download
+      if (url.includes('cloudinary.com')) {
+        if (type === 'pdf') {
+          // Already has fl_attachment from server
+          if (!url.includes('fl_attachment')) {
+            const separator = url.includes('?') ? '&' : '?';
+            downloadUrl = `${url}${separator}fl_attachment`;
+          }
+        } else if (type === 'video' || type === 'audio') {
+          // Add download parameter for media files
+          const separator = url.includes('?') ? '&' : '?';
+          downloadUrl = `${url}${separator}fl_attachment`;
+        }
+      }
+
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      
+      // Ensure proper file extension
+      if (type === 'pdf' && filename && !filename.toLowerCase().endsWith('.pdf')) {
+        filename = `${filename}.pdf`;
+      } else if (type === 'video' && filename && !filename.toLowerCase().endsWith('.mp4')) {
+        filename = `${filename}.mp4`;
+      } else if (type === 'audio' && filename && !filename.toLowerCase().endsWith('.mp3')) {
+        filename = `${filename}.mp3`;
+      }
+      
+      link.download = filename || `${selectedLecture?.lectureTitle?.replace(/\s+/g, '_')}_${type}`;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success(`${type} download started!`);
+      
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error(`Failed to download ${type}`);
+    } finally {
+      setDownloadLoading(prev => ({ ...prev, [type]: false }));
     }
-    
-    link.download = filename || `${selectedLecture?.lectureTitle?.replace(/\s+/g, '_')}_${type}`;
-    link.target = '_blank';
-    
-    // For Cloudinary PDFs, add force download parameter
-    if (type === 'pdf' && url.includes('cloudinary.com')) {
-      const separator = url.includes('?') ? '&' : '?';
-      link.href = `${url}${separator}fl_attachment`;
-    }
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   // Show loading state
@@ -357,7 +428,7 @@ function ViewLecture() {
                 <p className="text-gray-600">{selectedLecture.lectureTitle}</p>
               </div>
             </div>
-            {/* FIXED: Changed to royal blue background with white text */}
+            {/* XP Badge */}
             <div className="flex items-center gap-2 bg-[#4169E1] text-white px-4 py-2 rounded-full shadow-md">
               <FaTrophy className="text-yellow-300" />
               <span className="font-bold">{userData?.xp || 0} XP</span>
@@ -466,9 +537,12 @@ function ViewLecture() {
                     "video",
                     `${selectedLecture.lectureTitle}_video.mp4`
                   )}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                  disabled={downloadLoading.video}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
                 >
-                  <FaVideo /> Video <FaDownload className="ml-2" />
+                  <FaVideo /> 
+                  {downloadLoading.video ? "Preparing..." : "Video"}
+                  <FaDownload className="ml-2" />
                 </button>
               )}
               {selectedLecture.audioUrl && (
@@ -478,9 +552,12 @@ function ViewLecture() {
                     "audio",
                     `${selectedLecture.lectureTitle}_audio.mp3`
                   )}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                  disabled={downloadLoading.audio}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50"
                 >
-                  <FaHeadphones /> Audio <FaDownload className="ml-2" />
+                  <FaHeadphones />
+                  {downloadLoading.audio ? "Preparing..." : "Audio"}
+                  <FaDownload className="ml-2" />
                 </button>
               )}
               {selectedLecture.notesUrl && (
@@ -490,9 +567,12 @@ function ViewLecture() {
                     "pdf",
                     `${selectedLecture.lectureTitle}_notes.pdf`
                   )}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                  disabled={downloadLoading.pdf}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50"
                 >
-                  <FaFilePdf /> Notes <FaDownload className="ml-2" />
+                  <FaFilePdf />
+                  {downloadLoading.pdf ? "Preparing..." : "Notes"}
+                  <FaDownload className="ml-2" />
                 </button>
               )}
             </div>
@@ -591,7 +671,7 @@ function ViewLecture() {
                           <Line
                             type="monotone"
                             dataKey="attention"
-                            stroke="#4169E1"  // Royal blue for the line
+                            stroke="#4169E1"
                             strokeWidth={3}
                             dot={{ r: 1 }}
                             activeDot={{ r: 6 }}
@@ -663,6 +743,7 @@ function ViewLecture() {
             <h3 className="font-bold text-gray-700 mb-4">Instructor</h3>
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full overflow-hidden">
+                {/* SAFE CHECK FOR CREATOR PHOTO */}
                 {selectedCourse.creator?.photoUrl ? (
                   <img
                     src={selectedCourse.creator.photoUrl}
@@ -671,13 +752,17 @@ function ViewLecture() {
                   />
                 ) : (
                   <div className="w-full h-full bg-[#4169E1] flex items-center justify-center text-white font-bold">
-                    {selectedCourse.creator?.name?.charAt(0) || "I"}
+                    {/* SAFE CHECK FOR INITIALS */}
+                    {selectedCourse.creator?.name ? selectedCourse.creator.name.charAt(0).toUpperCase() : "I"}
                   </div>
                 )}
               </div>
               <div>
-                <p className="font-bold">{selectedCourse.creator?.name || "Instructor"}</p>
-                <p className="text-sm text-gray-600">Top Rated Instructor</p>
+                {/* CORRECT NAME DISPLAY + CHANGED LABEL */}
+                <p className="font-bold">
+                    {selectedCourse.creator?.name || "Unknown Instructor"}
+                </p>
+                <p className="text-sm text-gray-600">Course Educator</p>
               </div>
             </div>
           </div>

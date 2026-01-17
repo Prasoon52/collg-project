@@ -26,7 +26,9 @@ export const createCourse = async (req, res) => {
 
 export const getPublishedCourses = async (req, res) => {
     try {
-        const courses = await Course.find({ isPublished: true }).populate("lectures reviews");
+        const courses = await Course.find({ isPublished: true })
+            .populate("lectures reviews")
+            .populate({ path: "creator", select: "name photoUrl" });
         if (!courses) {
             return res.status(404).json({ message: "No courses found" });
         }
@@ -56,7 +58,8 @@ export const editCourse = async (req, res) => {
         let thumbnail;
 
         if (req.file) {
-            thumbnail = await uploadOnCloudinary(req.file.path);
+            // FIXED: Use .buffer since Multer is in Memory mode
+            thumbnail = await uploadOnCloudinary(req.file.buffer);
         }
 
         let course = await Course.findById(courseId);
@@ -75,7 +78,10 @@ export const editCourse = async (req, res) => {
 export const getCourseById = async (req, res) => {
     try {
         const { courseId } = req.params;
-        const course = await Course.findById(courseId).populate("lectures");
+        const course = await Course.findById(courseId)
+            .populate("lectures")
+            .populate({ path: "creator", select: "name photoUrl" });
+
         if (!course) {
             return res.status(404).json({ message: "Course not found" });
         }
@@ -142,41 +148,83 @@ export const getCourseLecture = async (req, res) => {
     }
 };
 
-// ✅ FIXED EDIT LECTURE (Handles memory storage buffers)
-// ✅ FIXED EDIT LECTURE (Handles memory storage buffers)
 export const editLecture = async (req, res) => {
     try {
-        const {lectureId} = req.params
-        const {isPreviewFree , lectureTitle} = req.body
-        const lecture = await Lecture.findById(lectureId)
-          if(!lecture){
-            return res.status(404).json({message:"Lecture not found"})
-        }
-        const mediaResult = await uploadMediaWithAudio(req.file.buffer);
-        // console.log("Media Result:", mediaResult);
+        const { lectureId } = req.params;
+        const { isPreviewFree, lectureTitle } = req.body;
 
-        if (mediaResult) {
-          lecture.videoUrl = mediaResult.videoUrl;
-          lecture.audioUrl = mediaResult.audioUrl;
+        console.log(`📝 Edit Lecture - ID: ${lectureId}`);
+        console.log('📂 Request Body:', req.body);
+        console.log('📂 Request Files:', req.files);
+        console.log('📂 Request File:', req.file);
+
+        const lecture = await Lecture.findById(lectureId);
+        if (!lecture) return res.status(404).json({ message: "Lecture not found" });
+
+        // 1. Handle Video Upload - check multiple possible locations
+        let videoFile = null;
+        if (req.files && req.files['videoUrl']) {
+            videoFile = req.files['videoUrl'][0];
+        } else if (req.file && req.file.fieldname === 'videoUrl') {
+            videoFile = req.file;
         }
-        if(lectureTitle){
-            lecture.lectureTitle = lectureTitle
+
+        if (videoFile) {
+            console.log(`🎬 Processing video: ${videoFile.originalname} (${videoFile.size} bytes)`);
+            
+            const mediaResult = await uploadMediaWithAudio(
+                videoFile.buffer,
+                videoFile.originalname
+            );
+            
+            if (mediaResult) {
+                lecture.videoUrl = mediaResult.videoUrl;
+                lecture.audioUrl = mediaResult.audioUrl || lecture.audioUrl;
+                console.log("✅ Video updated");
+            }
         }
-        lecture.isPreviewFree = isPreviewFree
+
+        // 2. Handle PDF Notes Upload
+        let notesFile = null;
+        if (req.files && req.files['notesUrl']) {
+            notesFile = req.files['notesUrl'][0];
+        } else if (req.file && req.file.fieldname === 'notesUrl') {
+            notesFile = req.file;
+        }
+
+        if (notesFile) {
+            console.log(`📄 Processing PDF: ${notesFile.originalname}`);
+            
+            const notesUrl = await uploadFileToCloudinary(
+                notesFile.buffer,
+                notesFile.originalname
+            );
+            
+            if (notesUrl) {
+                lecture.notesUrl = notesUrl;
+                console.log("✅ Notes updated");
+            }
+        }
+
+        // Update text fields
+        if (lectureTitle !== undefined) {
+            lecture.lectureTitle = lectureTitle;
+        }
         
-        await lecture.save()
-        
+        if (isPreviewFree !== undefined) {
+            lecture.isPreviewFree = isPreviewFree === 'true' || isPreviewFree === true;
+        }
+
+        await lecture.save();
         return res.status(200).json({
             success: true,
             message: "Lecture updated successfully",
-            lecture: updatedLecture,
+            lecture: lecture,
         });
     } catch (error) {
-        console.error("❌ Edit Lecture Controller Error:", error);
-        console.error("❌ Error stack:", error.stack);
+        console.error("❌ Edit Lecture Error:", error);
         return res.status(500).json({ 
-            message: `Failed to edit Lecture: ${error.message}`,
-            error: error.stack 
+            message: `Failed to edit Lecture: ${error.message}`
         });
     }
 };
@@ -197,10 +245,6 @@ export const removeLecture = async (req, res) => {
         return res.status(500).json({ message: `Failed to remove Lecture: ${error.message}` });
     }
 };
-
-// ==========================================
-// USER / CREATOR CONTROLLERS
-// ==========================================
 
 export const getCreatorById = async (req, res) => {
     try {

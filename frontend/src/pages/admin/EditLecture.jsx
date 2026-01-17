@@ -7,7 +7,6 @@ import { serverUrl } from "../../App";
 import { setLectureData } from "../../redux/lectureSlice";
 import { toast } from "react-toastify";
 import { ClipLoader } from "react-spinners";
-import { CollapsibleVideo } from "./PreviousVideo";
 
 function EditLecture() {
   const navigate = useNavigate();
@@ -16,7 +15,6 @@ function EditLecture() {
   const { lectureData } = useSelector((state) => state.lecture);
 
   const selectedLecture = lectureData.find((l) => l._id === lectureId);
-  // console.log(selectedLecture)
 
   // --- STATE ---
   const [videoFile, setVideoFile] = useState(null);
@@ -43,61 +41,55 @@ function EditLecture() {
       .get(serverUrl + `/api/quiz/${lectureId}`, { withCredentials: true })
       .then((r) => {setQuiz(r.data)})
       .catch(() => setQuiz(null));
-
-    // console.log(quiz)
   }, [lectureId]);
 
   // --- UPDATE LECTURE FUNCTION (FIXED) ---
   const editLecture = async () => {
-  setLoading(true);
-  try {
-    const formData = new FormData();
-    formData.append("lectureTitle", lectureTitle);
-    formData.append("isPreviewFree", isPreviewFree.toString()); // Convert boolean to string
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("lectureTitle", lectureTitle);
+      formData.append("isPreviewFree", isPreviewFree.toString());
 
-    // Append video file if selected
-    if (videoFile) {
-        formData.append("videoUrl", videoFile);
-        console.log("🎬 Adding video:", videoFile.name);
+      // ✅ CORRECT: Append files using correct field names
+      if (videoFile) {
+          formData.append("videoUrl", videoFile);
+          console.log("🎬 Adding video:", videoFile.name);
+      }
+
+      if (notesFile) {
+          formData.append("notesUrl", notesFile);
+          console.log("📄 Adding PDF:", notesFile.name);
+      }
+
+      console.log("📤 Sending form data...");
+
+      const result = await axios.post(
+          serverUrl + `/api/course/editlecture/${lectureId}`,
+          formData,
+          { 
+              withCredentials: true,
+              // ✅ No need to set Content-Type header manually for FormData
+          }
+      );
+
+      console.log("✅ Server response:", result.data);
+
+      // Update Redux state
+      const updatedLectures = lectureData.map((lecture) => 
+          lecture._id === lectureId ? result.data.lecture : lecture
+      );
+      dispatch(setLectureData(updatedLectures));
+
+      toast.success("✅ Lecture Updated Successfully!");
+      navigate(`/createlecture/${courseId}`);
+    } catch (e) {
+        console.error("🔥 Update failed:", e.response?.data || e);
+        toast.error("❌ Update Failed: " + (e.response?.data?.message || e.message));
     }
+    setLoading(false);
+  };
 
-    // Append notes file if selected
-    if (notesFile) {
-        formData.append("notesUrl", notesFile);
-        console.log("📄 Adding PDF:", notesFile.name);
-    }
-
-    console.log("📤 Sending form data...");
-    console.log("📝 Data:", { lectureTitle, isPreviewFree });
-    console.log("📁 Files:", { videoFile: videoFile?.name, notesFile: notesFile?.name });
-
-    const result = await axios.post(
-        serverUrl + `/api/course/editlecture/${lectureId}`,
-        formData,
-        { 
-            withCredentials: true,
-            headers: {
-                'Content-Type': 'multipart/form-data'
-            }
-        }
-    );
-
-    console.log("✅ Server response:", result.data);
-
-    // Update Redux state
-    const updatedLectures = lectureData.map((lecture) => 
-        lecture._id === lectureId ? result.data.lecture : lecture
-    );
-    dispatch(setLectureData(updatedLectures));
-
-    toast.success("✅ Lecture Updated Successfully!");
-    navigate(`/createlecture/${courseId}`);
-  } catch (e) {
-      console.error("🔥 Update failed:", e.response?.data || e);
-      toast.error("❌ Update Failed: " + (e.response?.data?.message || e.message));
-  }
-  setLoading(false);
-};
   const removeLecture = async () => {
     setLoading1(true);
     try {

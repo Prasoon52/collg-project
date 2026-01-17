@@ -7,10 +7,9 @@ const upload = multer({
     storage,
     limits: {
         fileSize: 500 * 1024 * 1024, // 500MB limit
-        files: 10 // Max 10 files
+        files: 10 
     },
     fileFilter: (req, file, cb) => {
-        // Accept video, PDF, and image files
         const allowedMimes = [
             'video/mp4', 'video/mov', 'video/avi', 'video/webm',
             'application/pdf',
