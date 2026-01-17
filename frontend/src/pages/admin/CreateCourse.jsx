@@ -39,14 +39,14 @@ const CreateCourse = () => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 px-4">
+      className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 px-4">
       {/* Back Button */}
       <motion.button
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => navigate("/dashboard")}
-        className="fixed top-8 left-8 bg-white shadow-lg rounded-full p-3 hover:bg-gray-100">
-        <FaArrowLeftLong className="w-5 h-5" />
+        className="fixed top-8 left-8 bg-white shadow-xl rounded-full p-3 hover:bg-blue-100 transition">
+        <FaArrowLeftLong className="w-5 h-5 text-black" />
       </motion.button>
 
       {/* Card */}
@@ -54,8 +54,8 @@ const CreateCourse = () => {
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ delay: 0.1 }}
-        className="w-full max-w-xl bg-white rounded-2xl shadow-xl p-8">
-        <h2 className="text-3xl font-bold text-center text-gray-900 mb-2">
+        className="w-full max-w-xl bg-blue-100 rounded-3xl shadow-2xl p-10 border border-gray-200">
+        <h2 className="text-3xl font-bold text-center text-black mb-2">
           Create New Course
         </h2>
         <p className="text-center text-gray-600 mb-8">
@@ -73,7 +73,7 @@ const CreateCourse = () => {
               placeholder="e.g. Complete React Mastery"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-black transition"
+              className="w-full rounded-2xl border bg-white border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition shadow-sm"
             />
           </div>
 
@@ -85,7 +85,7 @@ const CreateCourse = () => {
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-black transition">
+              className="w-full rounded-2xl border border-gray-300 px-4 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition shadow-sm">
               <option value="">Select category</option>
               <option value="App Development">App Development</option>
               <option value="AI/ML">AI / ML</option>
@@ -105,7 +105,7 @@ const CreateCourse = () => {
             whileTap={{ scale: 0.97 }}
             disabled={loading}
             onClick={CreateCourseHandler}
-            className="w-full flex items-center justify-center gap-2 bg-black text-white py-3 rounded-xl font-medium shadow-md hover:bg-gray-800 disabled:opacity-70">
+            className="w-full flex items-center justify-center gap-2 bg-blue-900 text-white py-3 rounded-2xl font-semibold shadow-lg hover:bg-blue-900 disabled:opacity-70 transition">
             {loading ? <ClipLoader size={22} color="white" /> : "Create Course"}
           </motion.button>
         </form>

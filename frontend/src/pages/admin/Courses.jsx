@@ -43,33 +43,38 @@ function Courses() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="min-h-screen bg-gradient-to-br from-gray-100 to-gray-200 px-4 sm:px-8 py-10">
-      {/* Back Button */}
+      className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 px-4 sm:px-8 py-10">
+      {/* Back */}
       <motion.button
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => navigate("/dashboard")}
-        className="fixed top-8 left-8 bg-white shadow-lg rounded-full p-3 z-20">
-        <FaArrowLeftLong />
+        className="fixed top-6 left-6 bg-white shadow-xl rounded-full p-3 z-20 hover:bg-blue-50">
+        <FaArrowLeftLong className="text-black" />
       </motion.button>
 
       {/* Header */}
-      <div className="max-w-7xl mx-auto mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-2xl font-bold text-gray-900">My Courses</h1>
+      <div className="max-w-7xl mx-auto mb-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold text-black">My Courses</h1>
+          <p className="text-gray-600 text-sm mt-1">
+            Manage, edit, and publish your courses
+          </p>
+        </div>
 
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => navigate("/createcourses")}
-          className="bg-black text-white px-6 py-3 rounded-xl shadow-md hover:bg-gray-800">
+          className="bg-black text-white px-6 py-3 rounded-2xl shadow-lg hover:bg-blue-700 transition">
           + Create Course
         </motion.button>
       </div>
 
-      {/* Desktop Table */}
-      <div className="hidden md:block max-w-7xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
+      {/* DESKTOP TABLE */}
+      <div className="hidden md:block max-w-7xl mx-auto bg-white rounded-3xl shadow-2xl overflow-hidden border">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b">
+          <thead className="bg-gray-50 border-b text-gray-600">
             <tr>
               <th className="text-left px-6 py-4">Course</th>
               <th className="text-left px-6 py-4">Price</th>
@@ -77,6 +82,7 @@ function Courses() {
               <th className="text-left px-6 py-4">Action</th>
             </tr>
           </thead>
+
           <tbody>
             {creatorCourseData?.map((course, index) => (
               <motion.tr
@@ -85,26 +91,29 @@ function Courses() {
                 variants={rowVariants}
                 initial="hidden"
                 animate="visible"
-                className="border-b hover:bg-gray-50">
+                className="border-b hover:bg-blue-50/40 transition">
                 <td className="px-6 py-4 flex items-center gap-4">
                   <img
                     src={course.thumbnail || img1}
                     alt=""
-                    className="w-16 h-16 rounded-lg object-cover"
+                    className="w-16 h-16 rounded-xl object-cover border"
                   />
-                  <span className="font-medium">{course.title}</span>
+                  <div>
+                    <p className="font-semibold text-black">{course.title}</p>
+                    <p className="text-xs text-gray-500">{course.category}</p>
+                  </div>
                 </td>
 
-                <td className="px-6 py-4">
+                <td className="px-6 py-4 font-medium">
                   {course.price ? `₹${course.price}` : "₹ NA"}
                 </td>
 
                 <td className="px-6 py-4">
                   <span
-                    className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    className={`px-4 py-1.5 rounded-full text-xs font-semibold ${
                       course.isPublished
                         ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-600"
+                        : "bg-red-100 text-yellow-700"
                     }`}>
                     {course.isPublished ? "Published" : "Draft"}
                   </span>
@@ -112,7 +121,7 @@ function Courses() {
 
                 <td className="px-6 py-4">
                   <FaEdit
-                    className="text-gray-600 hover:text-black cursor-pointer"
+                    className="text-gray-500 hover:text-blue-600 cursor-pointer text-lg transition"
                     onClick={() => navigate(`/addcourses/${course._id}`)}
                   />
                 </td>
@@ -122,50 +131,56 @@ function Courses() {
         </table>
 
         <p className="text-center text-xs text-gray-400 py-6">
-          A list of your created courses.
+          Showing all courses created by you
         </p>
       </div>
 
-      {/* Mobile Cards */}
-      <div className="md:hidden space-y-4 max-w-7xl mx-auto">
+      {/* MOBILE CARDS */}
+      <div className="md:hidden space-y-5 max-w-7xl mx-auto">
         {creatorCourseData?.map((course, index) => (
           <motion.div
             key={course._id}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
-            className="bg-white rounded-xl shadow-md p-4 flex flex-col gap-3">
+            className="bg-white rounded-2xl shadow-lg p-4 border">
             <div className="flex items-center gap-4">
               <img
                 src={course.thumbnail || img1}
                 alt=""
-                className="w-16 h-16 rounded-lg object-cover"
+                className="w-16 h-16 rounded-xl object-cover"
               />
+
               <div className="flex-1">
-                <h2 className="font-semibold text-sm">{course.title}</h2>
+                <h2 className="font-semibold text-black text-sm">
+                  {course.title}
+                </h2>
                 <p className="text-xs text-gray-500">
                   {course.price ? `₹${course.price}` : "₹ NA"}
                 </p>
               </div>
+
               <FaEdit
-                className="text-gray-600 cursor-pointer"
+                className="text-gray-500 text-lg cursor-pointer"
                 onClick={() => navigate(`/addcourses/${course._id}`)}
               />
             </div>
 
-            <span
-              className={`w-fit px-3 py-1 rounded-full text-xs font-medium ${
-                course.isPublished
-                  ? "bg-green-100 text-green-700"
-                  : "bg-red-100 text-red-600"
-              }`}>
-              {course.isPublished ? "Published" : "Draft"}
-            </span>
+            <div className="mt-3">
+              <span
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold ${
+                  course.isPublished
+                    ? "bg-green-100 text-green-700"
+                    : "bg-red-100 text-yellow-700"
+                }`}>
+                {course.isPublished ? "Published" : "Draft"}
+              </span>
+            </div>
           </motion.div>
         ))}
 
         <p className="text-center text-xs text-gray-400 pt-6">
-          A list of your created courses.
+          Showing all courses created by you
         </p>
       </div>
     </motion.div>

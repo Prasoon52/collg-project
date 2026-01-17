@@ -12,7 +12,6 @@ import { setCourseData } from "../../redux/courseSlice";
 import SelectField from "../../components/SelectField";
 import InputField from "../../components/InputField";
 
-
 function AddCourses() {
   const navigate = useNavigate();
   const { courseId } = useParams();
@@ -35,7 +34,7 @@ function AddCourses() {
     isPublished: false,
   });
 
-  /* -------------------- Fetch Course -------------------- */
+  /* ---------------- Fetch Course ---------------- */
   useEffect(() => {
     const fetchCourse = async () => {
       try {
@@ -43,24 +42,21 @@ function AddCourses() {
           `${serverUrl}/api/course/getcourse/${courseId}`,
           { withCredentials: true },
         );
-
         setForm(res.data);
         setFrontendImage(res.data.thumbnail || img);
-      } catch (err) {
+      } catch {
         toast.error("Failed to load course");
       }
     };
-
     fetchCourse();
   }, [courseId]);
 
-  /* -------------------- Handlers -------------------- */
-  const handleChange = (field) => (e) => {
+  const handleChange = (field) => (e) =>
     setForm({ ...form, [field]: e.target.value });
-  };
 
   const handleThumbnail = (e) => {
     const file = e.target.files[0];
+    if (!file) return;
     setBackendImage(file);
     setFrontendImage(URL.createObjectURL(file));
   };
@@ -68,8 +64,7 @@ function AddCourses() {
   const handleSave = async () => {
     setLoading(true);
     const formData = new FormData();
-
-    Object.entries(form).forEach(([key, value]) => formData.append(key, value));
+    Object.entries(form).forEach(([k, v]) => formData.append(k, v));
     if (backendImage) formData.append("thumbnail", backendImage);
 
     try {
@@ -79,15 +74,15 @@ function AddCourses() {
         { withCredentials: true },
       );
 
-      const updated = res.data;
-      const updatedCourses = courseData.map((c) =>
-        c._id === updated._id ? updated : c,
+      dispatch(
+        setCourseData(
+          courseData.map((c) => (c._id === res.data._id ? res.data : c)),
+        ),
       );
 
-      dispatch(setCourseData(updatedCourses));
-      toast.success("Course updated");
+      toast.success("Course updated successfully");
       navigate("/courses");
-    } catch (err) {
+    } catch {
       toast.error("Update failed");
     } finally {
       setLoading(false);
@@ -95,12 +90,12 @@ function AddCourses() {
   };
 
   const removeCourse = async () => {
+    if (!window.confirm("Are you sure you want to delete this course?")) return;
     setLoading(true);
     try {
       await axios.delete(`${serverUrl}/api/course/removecourse/${courseId}`, {
         withCredentials: true,
       });
-
       dispatch(setCourseData(courseData.filter((c) => c._id !== courseId)));
       toast.success("Course deleted");
       navigate("/courses");
@@ -112,129 +107,158 @@ function AddCourses() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-6 mt-10 bg-white rounded-xl shadow-lg border border-gray-200">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <FaArrowLeftLong
-          className="cursor-pointer"
-          onClick={() => navigate("/courses")}
-        />
-        <h2 className="text-2xl font-semibold">Edit Course</h2>
-        <button
-          className="bg-black text-white px-4 py-2 rounded-md"
-          onClick={() => navigate(`/createlecture/${courseId}`)}>
-          Go to Lectures
-        </button>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-100 via-white to-blue-200 py-10 px-4">
+      <div className="max-w-5xl mx-auto bg-white rounded-3xl shadow-2xl border p-8 space-y-10">
+        {/* HEADER */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <FaArrowLeftLong
+              className="cursor-pointer text-xl"
+              onClick={() => navigate("/courses")}
+            />
+            <div>
+              <h2 className="text-3xl font-extrabold text-black">
+                Edit Course
+              </h2>
+              <p className="text-sm text-gray-500">
+                Manage course details & publishing
+              </p>
+            </div>
+          </div>
 
-      {/* Actions */}
-      <div className="flex gap-3 mb-6">
-        <button
-          className={`px-4 py-2 rounded-md ${
-            form.isPublished
-              ? "bg-red-100 text-red-600"
-              : "bg-green-100 text-green-600"
-          }`}
-          onClick={() => setForm({ ...form, isPublished: !form.isPublished })}>
-          {form.isPublished ? "Unpublish" : "Publish"}
-        </button>
-
-        <button
-          className="bg-red-600 text-white px-4 py-2 rounded-md"
-          onClick={removeCourse}
-          disabled={loading}>
-          {loading ? <ClipLoader size={20} color="white" /> : "Remove"}
-        </button>
-      </div>
-
-      {/* Form */}
-      <div className="space-y-6">
-        <InputField
-          label="Title"
-          value={form.title}
-          onChange={handleChange("title")}
-          placeholder="Course title"
-        />
-
-        <InputField
-          label="Subtitle"
-          value={form.subTitle}
-          onChange={handleChange("subTitle")}
-          placeholder="Short subtitle"
-        />
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Description</label>
-          <textarea
-            value={form.description}
-            onChange={handleChange("description")}
-            className="w-full border rounded-md px-4 py-2 h-24"
-          />
+          <button
+            onClick={() => navigate(`/createlecture/${courseId}`)}
+            className="bg-black text-white px-5 py-2.5 rounded-xl hover:bg-blue-700 transition">
+            Manage Lectures
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <SelectField
-            label="Category"
-            value={form.category}
-            onChange={handleChange("category")}
-            options={[
-              "Web Development",
-              "AI/ML",
-              "Data Science",
-              "UI UX Designing",
-              "Ethical Hacking",
-              "Others",
-            ]}
-          />
+        {/* STATUS BAR */}
+        <div className="flex flex-wrap items-center gap-4">
+          <span
+            className={`px-4 py-2 rounded-full text-sm font-semibold ${
+              form.isPublished
+                ? "bg-green-100 text-green-700"
+                : "bg-red-100 text-yellow-700"
+            }`}>
+            {form.isPublished ? "Published" : "Draft"}
+          </span>
 
-          <SelectField
-            label="Level"
-            value={form.level}
-            onChange={handleChange("level")}
-            options={["Beginner", "Intermediate", "Advanced"]}
+          <button
+            onClick={() => setForm({ ...form, isPublished: !form.isPublished })}
+            className="px-4 py-2 rounded-xl border font-medium hover:bg-gray-50">
+            {form.isPublished ? "Unpublish" : "Publish"}
+          </button>
+
+          <button
+            onClick={removeCourse}
+            className="px-4 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700">
+            Remove Course
+          </button>
+        </div>
+
+        {/* FORM */}
+        <div className="space-y-6">
+          <InputField
+            label="Course Title"
+            value={form.title}
+            onChange={handleChange("title")}
+            placeholder="e.g. Complete React Mastery"
           />
 
           <InputField
-            label="Price (₹)"
-            type="number"
-            value={form.price}
-            onChange={handleChange("price")}
+            label="Subtitle"
+            value={form.subTitle}
+            onChange={handleChange("subTitle")}
+            placeholder="Short engaging subtitle"
           />
-        </div>
 
-        {/* Thumbnail */}
-        <div>
-          <input
-            ref={thumbRef}
-            type="file"
-            hidden
-            accept="image/*"
-            onChange={handleThumbnail}
-          />
-          <div className="relative w-[300px] h-[170px] cursor-pointer">
-            <img
-              src={frontendImage}
-              alt=""
-              className="w-full h-full rounded-md object-cover border"
-              onClick={() => thumbRef.current.click()}
+          <div>
+            <label className="block text-sm font-semibold mb-2">
+              Description
+            </label>
+            <textarea
+              value={form.description}
+              onChange={handleChange("description")}
+              className="w-full rounded-xl border px-4 py-3 h-28 focus:ring-2 focus:ring-blue-600"
             />
-            <MdEdit className="absolute top-2 right-2 text-white" />
           </div>
-        </div>
 
-        {/* Buttons */}
-        <div className="flex gap-4">
-          <button
-            className="border px-4 py-2 rounded-md"
-            onClick={() => navigate("/courses")}>
-            Cancel
-          </button>
-          <button
-            className="bg-black text-white px-6 py-2 rounded-md"
-            onClick={handleSave}
-            disabled={loading}>
-            {loading ? <ClipLoader size={20} color="white" /> : "Save"}
-          </button>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <SelectField
+              label="Category"
+              value={form.category}
+              onChange={handleChange("category")}
+              options={[
+                "Web Development",
+                "AI/ML",
+                "Data Science",
+                "UI UX Designing",
+                "Ethical Hacking",
+                "Others",
+              ]}
+            />
+
+            <SelectField
+              label="Level"
+              value={form.level}
+              onChange={handleChange("level")}
+              options={["Beginner", "Intermediate", "Advanced"]}
+            />
+
+            <InputField
+              label="Price (₹)"
+              type="number"
+              value={form.price}
+              onChange={handleChange("price")}
+            />
+          </div>
+
+          {/* THUMBNAIL */}
+          <div>
+            <label className="block text-sm font-semibold mb-2">
+              Course Thumbnail
+            </label>
+            <input
+              ref={thumbRef}
+              type="file"
+              hidden
+              accept="image/*"
+              onChange={handleThumbnail}
+            />
+            <div
+              onClick={() => thumbRef.current.click()}
+              className="relative w-[320px] h-[180px] rounded-xl overflow-hidden border cursor-pointer group">
+              <img
+                src={frontendImage}
+                alt="thumbnail"
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                <MdEdit className="text-white text-3xl" />
+              </div>
+            </div>
+          </div>
+
+          {/* ACTIONS */}
+          <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t">
+            <button
+              onClick={() => navigate("/courses")}
+              className="flex-1 border py-3 rounded-xl hover:bg-gray-50">
+              Cancel
+            </button>
+
+            <button
+              onClick={handleSave}
+              disabled={loading}
+              className="flex-1 bg-black text-white py-3 rounded-xl font-semibold hover:bg-blue-700 transition">
+              {loading ? (
+                <ClipLoader size={20} color="white" />
+              ) : (
+                "Save Changes"
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
