@@ -1,6 +1,6 @@
 import express from "express";
 import { createLiveLecture, getLectures, getStreamToken } from "../controllers/liveController.js";
-import { isAuth } from "../middlewares/isAuth.js"; 
+import isAuth from "../middlewares/isAuth.js"; 
 
 const router = express.Router();
 
