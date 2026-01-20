@@ -14,7 +14,8 @@ import {
   FaFileAlt,
   FaTrash,
   FaDownload,
-  FaInfoCircle
+  FaInfoCircle,
+  FaClock
 } from "react-icons/fa";
 import { motion } from "framer-motion";
 import { toast } from "react-toastify";
@@ -44,15 +45,24 @@ export default function LiveClassDashboard() {
       }
     } catch (error) {
       console.error("Error fetching lectures", error);
+      toast.error("Failed to load lectures");
     }
   };
 
   const handleShowUploadModal = (lecture, isUpdate = false) => {
+    if (!lecture.isInstructor) {
+      toast.error("Only instructor can upload recordings");
+      return;
+    }
     setSelectedLecture({...lecture, isUpdate});
     setShowUploadModal(true);
   };
 
   const handleShowNotesModal = (lecture) => {
+    if (!lecture.isInstructor) {
+      toast.error("Only instructor can manage notes");
+      return;
+    }
     setSelectedLecture(lecture);
     setShowNotesModal(true);
   };
@@ -85,9 +95,7 @@ export default function LiveClassDashboard() {
           'application/vnd.openxmlformats-officedocument.presentationml.presentation',
           'text/plain',
           'image/jpeg',
-          'image/png',
-          'application/vnd.ms-excel',
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          'image/png'
         ];
         
         if (!validTypes.includes(file.type)) {
@@ -117,9 +125,6 @@ export default function LiveClassDashboard() {
     const formData = new FormData();
     formData.append('video', videoFile);
     formData.append('meetingId', selectedLecture.meetingId);
-    if (selectedLecture.isUpdate) {
-      formData.append('isUpdate', 'true');
-    }
 
     try {
       const endpoint = selectedLecture.isUpdate 
@@ -139,13 +144,13 @@ export default function LiveClassDashboard() {
 
       if (data.success) {
         toast.success(data.message || "Recording uploaded successfully!");
-        // Update lecture with new recording URL
+        // Update lecture locally
         setLectures(prev => prev.map(l => l.meetingId === selectedLecture.meetingId ? 
-          { ...l, recordingUrl: data.url } : l));
+          { ...l, recordingUrl: data.url, hasRecording: true } : l));
         setShowUploadModal(false);
         setVideoFile(null);
         setSelectedLecture(null);
-        fetchLectures(); // Refresh data
+        fetchLectures();
       } else {
         toast.error(data.message || "Upload failed");
       }
@@ -183,13 +188,13 @@ export default function LiveClassDashboard() {
 
       if (data.success) {
         toast.success("Notes uploaded successfully!");
-        // Update lecture with new notes
+        // Update lecture locally
         setLectures(prev => prev.map(l => l.meetingId === selectedLecture.meetingId ? 
-          { ...l, notes: data.notes } : l));
+          { ...l, notes: data.notes, hasNotes: true } : l));
         setShowNotesModal(false);
         setNotesFile(null);
         setSelectedLecture(null);
-        fetchLectures(); // Refresh data
+        fetchLectures();
       } else {
         toast.error(data.message || "Upload failed");
       }
@@ -198,30 +203,6 @@ export default function LiveClassDashboard() {
       toast.error(error.response?.data?.message || "Upload failed");
     } finally {
       setUploadingId(null);
-    }
-  };
-
-  const handleDownloadNotes = async (lecture) => {
-    try {
-      // Use the backend download endpoint for proper file download
-      const downloadUrl = `${serverUrl}/api/live/download-notes/${lecture.meetingId}`;
-      
-      // Create a temporary link for download
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      
-      // Add authentication headers through URL params or use a different approach
-      // For now, we'll open in a new tab which should handle cookies/auth
-      window.open(downloadUrl, '_blank');
-      
-    } catch (error) {
-      console.error('Download failed:', error);
-      toast.error('Download failed. Please try again.');
-      
-      // Fallback to direct URL
-      if (lecture.notes && lecture.notes.url) {
-        window.open(lecture.notes.url, '_blank');
-      }
     }
   };
 
@@ -238,8 +219,8 @@ export default function LiveClassDashboard() {
       if (data.success) {
         toast.success("Notes deleted successfully!");
         setLectures(prev => prev.map(l => l.meetingId === meetingId ? 
-          { ...l, notes: null } : l));
-        fetchLectures(); // Refresh data
+          { ...l, notes: null, hasNotes: false } : l));
+        fetchLectures();
       }
     } catch (error) {
       console.error(error);
@@ -247,6 +228,7 @@ export default function LiveClassDashboard() {
     }
   };
 
+  // Filter lectures based on tab
   const upcomingLectures = lectures.filter(l => l.isActive === true);
   const pastLectures = lectures.filter(l => l.isActive === false);
 
@@ -257,19 +239,31 @@ export default function LiveClassDashboard() {
     if (['pdf'].includes(ext)) return <FaFileAlt className="text-red-500" />;
     if (['doc', 'docx'].includes(ext)) return <FaFileAlt className="text-blue-500" />;
     if (['ppt', 'pptx'].includes(ext)) return <FaFileAlt className="text-orange-500" />;
-    if (['xls', 'xlsx'].includes(ext)) return <FaFileAlt className="text-green-600" />;
     if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) return <FaFileAlt className="text-green-500" />;
-    if (['txt'].includes(ext)) return <FaFileAlt className="text-gray-500" />;
     return <FaFileAlt />;
   };
 
   // Function to format file size
   const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
+    if (!bytes) return '0 KB';
+    if (bytes === 0) return '0 KB';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Function to format date
+  const formatDate = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    return d.toLocaleDateString('en-US', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   return (
@@ -301,7 +295,7 @@ export default function LiveClassDashboard() {
                   {selectedLecture.courseId?.title || "Course"}
                 </p>
                 <p className="text-sm text-slate-500">
-                  {new Date(selectedLecture.startTime).toLocaleDateString()}
+                  {formatDate(selectedLecture.startTime)}
                 </p>
               </div>
               
@@ -423,13 +417,14 @@ export default function LiveClassDashboard() {
                         </p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleDownloadNotes(selectedLecture)}
-                      className="text-blue-600 hover:text-blue-800 p-1"
-                      title="Download Notes"
+                    <a 
+                      href={selectedLecture.notes.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800"
                     >
                       <FaDownload />
-                    </button>
+                    </a>
                   </div>
                 </div>
               )}
@@ -457,7 +452,7 @@ export default function LiveClassDashboard() {
                     </p>
                     <input
                       type="file"
-                      accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.xls,.xlsx"
+                      accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.jpg,.jpeg,.png"
                       onChange={(e) => handleFileSelect(e, 'notes')}
                       className="hidden"
                       id="notes-upload"
@@ -469,7 +464,7 @@ export default function LiveClassDashboard() {
                       Choose File
                     </label>
                     <p className="text-xs text-slate-500 mt-2">
-                      PDF, DOC, PPT, TXT, JPG, PNG, XLS (Max 50MB)
+                      PDF, DOC, PPT, TXT, JPG, PNG (Max 50MB)
                     </p>
                   </div>
                 )}
@@ -518,9 +513,7 @@ export default function LiveClassDashboard() {
               Live Class Schedule
             </h1>
             <p className="text-slate-500 mt-2 text-lg">
-              {userData?.role === 'educator' 
-                ? "Manage and start your scheduled sessions." 
-                : "Join interactive sessions or watch recorded lectures."}
+              Manage and start your scheduled sessions.
             </p>
           </div>
           
@@ -551,16 +544,17 @@ export default function LiveClassDashboard() {
 
         {/* CONTENT GRID */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {(tab === "upcoming" ? upcomingLectures : pastLectures).map((lecture) => {
-            
-            const isMyLecture = userData?._id === lecture.instructorId?._id;
+          {(tab === "upcoming" ? upcomingLectures : pastLectures).map((lecture, index) => {
+            const isMyLecture = lecture.isInstructor;
+            const hasRecording = lecture.recordingUrl;
+            const hasNotes = lecture.notes && lecture.notes.url;
 
             return (
               <motion.div 
                 key={lecture._id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={`group bg-white rounded-3xl overflow-hidden transition-all duration-300
+                className={`group bg-white rounded-3xl overflow-hidden transition-all duration-300 h-full flex flex-col
                   ${isMyLecture 
                     ? "border-2 border-blue-500 shadow-xl shadow-blue-100" 
                     : "border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1"
@@ -570,7 +564,7 @@ export default function LiveClassDashboard() {
                 {/* Thumbnail Area */}
                 <div className="h-48 bg-slate-900 relative overflow-hidden">
                   <img 
-                     src={lecture.courseId?.thumbnail || "https://via.placeholder.com/400x200"} 
+                     src={lecture.courseId?.thumbnail || "https://images.unsplash.com/photo-1542744094-3a31f272c490?w=400&h=200&fit=crop"} 
                      alt="" 
                      className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700"
                   />
@@ -583,6 +577,14 @@ export default function LiveClassDashboard() {
                   {isMyLecture && (
                     <div className="absolute top-4 left-4 bg-blue-600 text-white text-[10px] font-black tracking-widest px-3 py-1 rounded-full uppercase shadow-lg">
                       MY CLASS
+                    </div>
+                  )}
+                  
+                  {/* Status Badge */}
+                  {tab === "past" && (
+                    <div className="absolute bottom-4 left-4 bg-slate-800/80 text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5">
+                      <FaClock className="text-green-400" />
+                      Completed
                     </div>
                   )}
                   
@@ -606,71 +608,77 @@ export default function LiveClassDashboard() {
                 </div>
 
                 {/* Info Area */}
-                <div className="p-6 space-y-4">
-                  <div>
+                <div className="p-6 flex flex-col flex-1">
+                  <div className="flex-1">
                      <div className="flex justify-between items-start mb-1">
                         <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider bg-blue-50 px-2 py-1 rounded">
                           {lecture.courseId?.title || "Course"}
                         </span>
                      </div>
-                     <h3 className="text-xl font-bold text-slate-900 leading-tight">{lecture.topic}</h3>
+                     <h3 className="text-xl font-bold text-slate-900 leading-tight mb-2">{lecture.topic}</h3>
+
+                     <div className="flex items-center gap-3 text-sm font-medium text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <FaCalendarAlt className="text-blue-400" />
+                        {formatDate(lecture.startTime)}
+                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 text-sm font-medium text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                     <FaCalendarAlt className="text-blue-400" />
-                     {new Date(lecture.startTime).toLocaleString([], {
-                        weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                     })}
-                  </div>
-
-                  {/* NOTES SECTION */}
-                  {lecture.notes && (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          {getFileIcon(lecture.notes.name)}
-                          <span className="font-semibold text-green-800">Notes Available</span>
+                  {/* NOTES SECTION - Consistent across all cards */}
+                  <div className="mt-4">
+                    {hasNotes ? (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {getFileIcon(lecture.notes.name)}
+                            <span className="font-semibold text-green-800">Notes Available</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <a 
+                              href={lecture.notes.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-green-600 hover:text-green-800 p-1"
+                              title="Download Notes"
+                            >
+                              <FaDownload />
+                            </a>
+                            {isMyLecture && (
+                              <>
+                                <button
+                                  onClick={() => handleShowNotesModal(lecture)}
+                                  className="text-blue-600 hover:text-blue-800 p-1"
+                                  title="Update Notes"
+                                >
+                                  <FaEdit />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteNotes(lecture.meetingId)}
+                                  className="text-red-600 hover:text-red-800 p-1"
+                                  title="Delete Notes"
+                                >
+                                  <FaTrash />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleDownloadNotes(lecture)}
-                            className="text-green-600 hover:text-green-800 p-1"
-                            title="Download Notes"
-                          >
-                            <FaDownload />
-                          </button>
-                          {isMyLecture && (
-                            <>
-                              <button
-                                onClick={() => handleShowNotesModal(lecture)}
-                                className="text-blue-600 hover:text-blue-800 p-1"
-                                title="Update Notes"
-                              >
-                                <FaEdit />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteNotes(lecture.meetingId)}
-                                className="text-red-600 hover:text-red-800 p-1"
-                                title="Delete Notes"
-                              >
-                                <FaTrash />
-                              </button>
-                            </>
-                          )}
-                        </div>
+                        <p className="text-xs text-slate-600 mt-1 truncate">
+                          {lecture.notes.name} • {formatFileSize(lecture.notes.size)}
+                        </p>
                       </div>
-                      <p className="text-xs text-slate-600 mt-1 truncate">
-                        {lecture.notes.name} • {formatFileSize(lecture.notes.size)}
-                      </p>
-                    </div>
-                  )}
+                    ) : isMyLecture && tab === "past" ? (
+                      <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3">
+                        <p className="text-slate-600 text-sm">No notes uploaded</p>
+                      </div>
+                    ) : null}
+                  </div>
 
                   {/* ACTIONS SECTION (Past Only) */}
                   {tab === "past" && (
                     <div className="space-y-3">
                       {/* RECORDING SECTION */}
                       <div className="flex gap-3">
-                        {lecture.recordingUrl ? (
+                        {hasRecording ? (
                           <>
                             <button 
                               onClick={() => window.open(lecture.recordingUrl, "_blank")}
@@ -688,34 +696,40 @@ export default function LiveClassDashboard() {
                               </button>
                             )}
                           </>
-                        ) : (
+                        ) : isMyLecture ? (
                           <button 
                             onClick={() => handleShowUploadModal(lecture, false)}
                             className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-md"
                           >
                             <FaUpload /> Upload Recording
                           </button>
+                        ) : (
+                          <div className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 bg-slate-100 text-slate-500">
+                            <FaClock /> Recording Not Available
+                          </div>
                         )}
                       </div>
 
-                      {/* NOTES UPLOAD/DOWNLOAD */}
-                      <div className="flex gap-3">
-                        {lecture.notes ? (
-                          <button
-                            onClick={() => handleShowNotesModal(lecture)}
-                            className="flex-1 py-3 rounded-lg font-bold flex items-center justify-center gap-2 bg-green-600 text-white hover:bg-green-700 transition-all shadow-md"
-                          >
-                            <FaEdit /> Update Notes
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleShowNotesModal(lecture)}
-                            className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 bg-green-600 text-white hover:bg-green-700 transition-all shadow-md"
-                          >
-                            <FaFileAlt /> Upload Notes
-                          </button>
-                        )}
-                      </div>
+                      {/* NOTES UPLOAD/DOWNLOAD - Only show for instructor */}
+                      {isMyLecture && (
+                        <div className="flex gap-3">
+                          {hasNotes ? (
+                            <button
+                              onClick={() => handleShowNotesModal(lecture)}
+                              className="flex-1 py-3 rounded-lg font-bold flex items-center justify-center gap-2 bg-green-600 text-white hover:bg-green-700 transition-all shadow-md"
+                            >
+                              <FaEdit /> Update Notes
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleShowNotesModal(lecture)}
+                              className="w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 bg-green-600 text-white hover:bg-green-700 transition-all shadow-md"
+                            >
+                              <FaFileAlt /> Upload Notes
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -25,10 +25,15 @@ if (process.env.STREAM_API_KEY && process.env.STREAM_SECRET_KEY) {
   console.warn("[Live] Stream credentials not configured. Using fallback mode.");
 }
 
+// Helper function to check if user is instructor
+const isInstructor = (lecture, userId) => {
+  return lecture.instructorId.toString() === userId.toString();
+};
+
 export const createLiveLecture = async (req, res) => {
   try {
     const { courseId, topic, description, startTime, duration } = req.body;
-    const instructorId = req.userId; 
+    const instructorId = req.userId; // Changed from req.user.id to req.userId
     const meetingId = `live-${courseId}-${Date.now()}`;
 
     console.log(`[Create Lecture] Creating lecture: ${meetingId}`);
@@ -42,6 +47,7 @@ export const createLiveLecture = async (req, res) => {
       duration,
       meetingId,
       isActive: true,
+      status: 'upcoming'
     });
 
     await Course.findByIdAndUpdate(courseId, {
@@ -64,7 +70,9 @@ export const createLiveLecture = async (req, res) => {
 export const getLectures = async (req, res) => {
   try {
     const { courseId } = req.params;
-    const lectures = await LiveLecture.find({ courseId }).sort({ startTime: 1 });
+    const lectures = await LiveLecture.find({ courseId })
+      .populate('instructorId', 'name photoUrl')
+      .sort({ startTime: -1 });
     res.status(200).json({ success: true, lectures });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -73,7 +81,7 @@ export const getLectures = async (req, res) => {
 
 export const getStreamToken = async (req, res) => {
   try {
-    const userId = req.userId.toString();
+    const userId = req.userId.toString(); // Changed from req.user.id to req.userId
     
     // Check if Stream is configured
     if (!streamClient) {
@@ -109,7 +117,7 @@ export const getStreamToken = async (req, res) => {
       success: true, 
       token: "fallback-token-" + Date.now(),
       apiKey: "fallback-key",
-      userId: req.userId.toString(),
+      userId: req.userId.toString(), // Changed from req.user.id to req.userId
       mode: "fallback",
       message: "Using fallback mode due to Stream error."
     });
@@ -119,24 +127,38 @@ export const getStreamToken = async (req, res) => {
 export const endLiveLecture = async (req, res) => {
   try {
     const { meetingId } = req.body;
-    const lecture = await LiveLecture.findOneAndUpdate(
-      { meetingId },
-      { 
-        isActive: false, 
-        endedAt: new Date()
-      },
-      { new: true }
-    );
+    const userId = req.userId; // Changed from req.user.id to req.userId
+    
+    const lecture = await LiveLecture.findOne({ meetingId });
     
     if (!lecture) {
       return res.status(404).json({ success: false, message: "Lecture not found" });
     }
     
+    // Check if user is the instructor
+    if (!isInstructor(lecture, userId)) {
+      return res.status(403).json({ 
+        success: false, 
+        message: "Unauthorized. Only instructor can end the lecture" 
+      });
+    }
+    
+    const updatedLecture = await LiveLecture.findOneAndUpdate(
+      { meetingId },
+      { 
+        isActive: false, 
+        endedAt: new Date(),
+        status: 'completed'
+      },
+      { new: true }
+    );
+    
     console.log(`[End Lecture] Lecture ended: ${meetingId}`);
     
     res.status(200).json({ 
       success: true, 
-      message: "Class ended successfully." 
+      message: "Class ended successfully.",
+      lecture: updatedLecture
     });
   } catch (error) {
     console.error(`[End Lecture Error]:`, error);
@@ -148,6 +170,8 @@ export const endLiveLecture = async (req, res) => {
 export const uploadRecording = async (req, res) => {
   try {
     const { meetingId } = req.body;
+    const userId = req.userId; // Changed from req.user.id to req.userId
+    
     const lecture = await LiveLecture.findOne({ meetingId });
 
     if (!lecture) {
@@ -161,6 +185,18 @@ export const uploadRecording = async (req, res) => {
       });
     }
 
+    // Check if user is the instructor
+    if (!isInstructor(lecture, userId)) {
+      // Clean up uploaded file
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
+      return res.status(403).json({ 
+        success: false, 
+        message: "Unauthorized. Only instructor can upload recording" 
+      });
+    }
+
     // Check if video file was uploaded
     if (!req.file) {
       return res.status(400).json({ 
@@ -170,7 +206,6 @@ export const uploadRecording = async (req, res) => {
     }
 
     console.log(`[Upload Recording] Processing for: ${meetingId}`);
-    console.log(`[Upload Recording] File:`, req.file);
 
     try {
       // Upload to Cloudinary
@@ -218,6 +253,8 @@ export const uploadRecording = async (req, res) => {
 export const updateRecording = async (req, res) => {
   try {
     const { meetingId } = req.body;
+    const userId = req.userId; // Changed from req.user.id to req.userId
+    
     const lecture = await LiveLecture.findOne({ meetingId });
 
     if (!lecture) {
@@ -228,6 +265,18 @@ export const updateRecording = async (req, res) => {
       return res.status(404).json({ 
         success: false, 
         message: "Lecture not found" 
+      });
+    }
+
+    // Check if user is the instructor
+    if (!isInstructor(lecture, userId)) {
+      // Clean up uploaded file
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
+      return res.status(403).json({ 
+        success: false, 
+        message: "Unauthorized. Only instructor can update recording" 
       });
     }
 
@@ -261,8 +310,17 @@ export const updateRecording = async (req, res) => {
       // Clean up uploaded file
       fs.unlinkSync(req.file.path);
 
-      // TODO: Optionally delete old recording from Cloudinary
-      // This would require extracting public_id from old URL
+      // Delete old recording from Cloudinary if needed
+      if (oldRecordingUrl) {
+        try {
+          const publicId = oldRecordingUrl.split('/').pop().split('.')[0];
+          await cloudinary.uploader.destroy(`lms_recordings/${publicId}`, { 
+            resource_type: 'video' 
+          });
+        } catch (deleteError) {
+          console.warn(`[Update Recording] Could not delete old recording:`, deleteError);
+        }
+      }
 
       res.status(200).json({
         success: true,
@@ -292,6 +350,8 @@ export const updateRecording = async (req, res) => {
 export const uploadNotes = async (req, res) => {
   try {
     const { meetingId } = req.body;
+    const userId = req.userId; // Changed from req.user.id to req.userId
+    
     const lecture = await LiveLecture.findOne({ meetingId });
 
     if (!lecture) {
@@ -305,6 +365,18 @@ export const uploadNotes = async (req, res) => {
       });
     }
 
+    // Check if user is the instructor
+    if (!isInstructor(lecture, userId)) {
+      // Clean up uploaded file
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
+      return res.status(403).json({ 
+        success: false, 
+        message: "Unauthorized. Only instructor can upload notes" 
+      });
+    }
+
     // Check if notes file was uploaded
     if (!req.file) {
       return res.status(400).json({ 
@@ -314,34 +386,24 @@ export const uploadNotes = async (req, res) => {
     }
 
     console.log(`[Upload Notes] Processing for: ${meetingId}`);
-    console.log(`[Upload Notes] File:`, req.file);
 
     try {
       // Determine resource type based on file extension
       const fileExt = path.extname(req.file.originalname).toLowerCase();
-      let resourceType = 'raw'; // Default to raw for documents
-      let transformation = [];
-      
-      if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].includes(fileExt)) {
+      let resourceType = 'raw';
+      if (['.jpg', '.jpeg', '.png', '.gif'].includes(fileExt)) {
         resourceType = 'image';
       } else if (['.pdf'].includes(fileExt)) {
-        resourceType = 'raw'; // PDFs should be raw type for proper download
-        transformation = { flags: 'attachment' }; // Force download for PDFs
-      } else if (['.doc', '.docx', '.ppt', '.pptx', '.txt', '.xls', '.xlsx'].includes(fileExt)) {
-        resourceType = 'raw';
-        transformation = { flags: 'attachment' }; // Force download for documents
+        resourceType = 'image';
       }
 
-      // Upload to Cloudinary with appropriate settings
-      const uploadOptions = {
+      // Upload to Cloudinary
+      const uploadResult = await cloudinary.uploader.upload(req.file.path, {
         resource_type: resourceType,
         public_id: `notes_${lecture._id}_${Date.now()}`,
         folder: "lms_notes",
-        timeout: 60000,
-        ...transformation
-      };
-
-      const uploadResult = await cloudinary.uploader.upload(req.file.path, uploadOptions);
+        timeout: 60000
+      });
 
       // Update lecture with notes information
       lecture.notes = {
@@ -349,8 +411,7 @@ export const uploadNotes = async (req, res) => {
         name: req.file.originalname,
         size: req.file.size,
         type: req.file.mimetype,
-        uploadedAt: new Date(),
-        publicId: uploadResult.public_id // Store public_id for deletion
+        uploadedAt: new Date()
       };
       await lecture.save();
 
@@ -382,59 +443,26 @@ export const uploadNotes = async (req, res) => {
   }
 };
 
-// === DOWNLOAD NOTES FUNCTION ===
-export const downloadNotes = async (req, res) => {
-  try {
-    const { meetingId } = req.params;
-    const lecture = await LiveLecture.findOne({ meetingId });
-
-    if (!lecture || !lecture.notes || !lecture.notes.url) {
-      return res.status(404).json({
-        success: false,
-        message: "Notes not found"
-      });
-    }
-
-    console.log(`[Download Notes] For: ${meetingId}`);
-
-    // Generate Cloudinary URL with download flag
-    if (lecture.notes.url.includes('cloudinary.com') && lecture.notes.publicId) {
-      // Build Cloudinary URL with forced download
-      const publicId = lecture.notes.publicId;
-      const fileExt = path.extname(lecture.notes.name).toLowerCase();
-      
-      // Cloudinary URL for download
-      const downloadUrl = cloudinary.url(publicId, {
-        resource_type: 'raw',
-        flags: 'attachment',
-        attachment: lecture.notes.name || 'lecture_notes'
-      });
-      
-      return res.redirect(downloadUrl);
-    }
-
-    // For non-Cloudinary URLs or fallback
-    res.redirect(lecture.notes.url);
-
-  } catch (error) {
-    console.error(`[Download Notes Error]:`, error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-};
-
 // === DELETE NOTES FUNCTION ===
 export const deleteNotes = async (req, res) => {
   try {
     const { meetingId } = req.body;
+    const userId = req.userId; // Changed from req.user.id to req.userId
+    
     const lecture = await LiveLecture.findOne({ meetingId });
 
     if (!lecture) {
       return res.status(404).json({ 
         success: false, 
         message: "Lecture not found" 
+      });
+    }
+
+    // Check if user is the instructor
+    if (!isInstructor(lecture, userId)) {
+      return res.status(403).json({ 
+        success: false, 
+        message: "Unauthorized. Only instructor can delete notes" 
       });
     }
 
@@ -447,17 +475,12 @@ export const deleteNotes = async (req, res) => {
 
     console.log(`[Delete Notes] Deleting notes for: ${meetingId}`);
 
-    // Delete file from Cloudinary if publicId exists
-    if (lecture.notes.publicId) {
-      try {
-        await cloudinary.uploader.destroy(lecture.notes.publicId, {
-          resource_type: 'raw'
-        });
-        console.log(`[Delete Notes] Cloudinary file deleted: ${lecture.notes.publicId}`);
-      } catch (cloudinaryError) {
-        console.warn(`[Delete Notes] Cloudinary delete failed:`, cloudinaryError.message);
-        // Continue with database deletion even if Cloudinary fails
-      }
+    // Delete file from Cloudinary
+    try {
+      const publicId = lecture.notes.url.split('/').pop().split('.')[0];
+      await cloudinary.uploader.destroy(`lms_notes/${publicId}`);
+    } catch (deleteError) {
+      console.warn(`[Delete Notes] Could not delete from Cloudinary:`, deleteError);
     }
 
     // Clear notes from lecture
@@ -478,17 +501,48 @@ export const deleteNotes = async (req, res) => {
   }
 };
 
-// === GET ALL LECTURES ===
+// === GET ALL LECTURES (with instructor check) ===
 export const getAllLectures = async (req, res) => {
   try {
+    const userId = req.userId; // Changed from req.user.id to req.userId
+    
     const lectures = await LiveLecture.find()
       .populate('courseId', 'title thumbnail')
       .populate('instructorId', 'name photoUrl')
-      .sort({ startTime: -1 });
+      .sort({ startTime: -1 })
+      .lean();
 
-    res.status(200).json({ success: true, lectures });
+    // Add isInstructor flag for each lecture
+    const lecturesWithInstructorFlag = lectures.map(lecture => ({
+      ...lecture,
+      isInstructor: lecture.instructorId && lecture.instructorId._id.toString() === userId.toString()
+    }));
+
+    res.status(200).json({ 
+      success: true, 
+      lectures: lecturesWithInstructorFlag 
+    });
   } catch (error) {
     console.error("[Get All Lectures Error]:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// === GET MY LECTURES (only instructor's lectures) ===
+export const getMyLectures = async (req, res) => {
+  try {
+    const userId = req.userId; // Changed from req.user.id to req.userId
+    
+    const lectures = await LiveLecture.find({ instructorId: userId })
+      .populate('courseId', 'title thumbnail')
+      .sort({ startTime: -1 });
+
+    res.status(200).json({ 
+      success: true, 
+      lectures 
+    });
+  } catch (error) {
+    console.error("[Get My Lectures Error]:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
