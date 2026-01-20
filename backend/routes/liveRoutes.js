@@ -6,11 +6,11 @@ import {
   getStreamToken, 
   endLiveLecture, 
   getAllLectures,
+  getMyLectures,
   uploadRecording,
   updateRecording,
   uploadNotes,
-  deleteNotes,
-  downloadNotes  // Added this import
+  deleteNotes
 } from "../controllers/liveController.js";
 import isAuth from "../middlewares/isAuth.js";
 
@@ -31,20 +31,23 @@ const uploadNotesMulter = multer({
   }
 });
 
+// Apply authentication middleware to all routes
+router.use(isAuth);
+
 // Lecture management routes
-router.post("/create", isAuth, createLiveLecture);
-router.get("/course/:courseId", isAuth, getLectures);
-router.get("/get-token", isAuth, getStreamToken);
-router.get("/all", isAuth, getAllLectures);
-router.post("/end", isAuth, endLiveLecture);
+router.post("/create", createLiveLecture);
+router.get("/course/:courseId", getLectures);
+router.get("/get-token", getStreamToken);
+router.get("/all", getAllLectures);
+router.get("/my-lectures", getMyLectures);
+router.post("/end", endLiveLecture);
 
 // Recording routes
-router.post("/upload-recording", isAuth, upload.single('video'), uploadRecording);
-router.post("/update-recording", isAuth, upload.single('video'), updateRecording);
+router.post("/upload-recording", upload.single('video'), uploadRecording);
+router.post("/update-recording", upload.single('video'), updateRecording);
 
 // Notes routes
-router.post("/upload-notes", isAuth, uploadNotesMulter.single('notes'), uploadNotes);
-router.post("/delete-notes", isAuth, deleteNotes);
-router.get("/download-notes/:meetingId", isAuth, downloadNotes); // Added download route
+router.post("/upload-notes", uploadNotesMulter.single('notes'), uploadNotes);
+router.post("/delete-notes", deleteNotes);
 
 export default router;
