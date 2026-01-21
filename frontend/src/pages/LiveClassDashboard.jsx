@@ -1371,6 +1371,9 @@ export default function LiveClassDashboard() {
   const [selectedLecture, setSelectedLecture] = useState(null);
   const [videoFile, setVideoFile] = useState(null);
   const [notesFile, setNotesFile] = useState(null);
+  const [downloadLoading, setDownloadLoading] = useState({ video: false, notes: false });
+
+  // Key to force reset file inputs
   const [inputKey, setInputKey] = useState(Date.now());
 
   const navigate = useNavigate();
@@ -1529,8 +1532,27 @@ export default function LiveClassDashboard() {
     }
   };
 
-  const handleDownloadNotes = (lecture) => {
+ const handleDownloadNotes = async (url, type, filename) => {
+    if (!url) return toast.error(`No ${type} available`);
+    setDownloadLoading((p) => ({ ...p, [type]: true }));
     try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      link.click();
+    } catch {
+      toast.error("Download failed");
+    } finally {
+      setDownloadLoading((p) => ({ ...p, [type]: false }));
+    }
+  };
+
+
+const handleDeleteNotes = async (meetingId) => {
+    if (!window.confirm("Are you sure you want to delete the notes?")) return;
+
       window.location.href = `${serverUrl}/api/live/download-notes/${lecture.meetingId}`;
     } catch {
       toast.error("Download failed.");
@@ -1597,6 +1619,7 @@ export default function LiveClassDashboard() {
       minute: "2-digit",
     });
   };
+  console.log(lectures)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 font-sans text-slate-800">
@@ -1756,12 +1779,12 @@ export default function LiveClassDashboard() {
                               </div>
                             </div>
 
-                            <div className="flex gap-1">
+                            <div className="flex items-center gap-2">
                               <button
-                                onClick={() => handleDownloadNotes(lecture)}
-                                className="p-2 bg-white rounded-lg text-emerald-600 hover:text-emerald-800 shadow-sm hover:shadow-md transition-all"
-                              >
-                                <FaDownload size={12} />
+                                onClick={() => handleDownloadNotes( lecture.notes.url, "notes", lecture.notes.name)}
+                                className="text-green-700 hover:text-green-900 p-1">
+                                <FaDownload />
+
                               </button>
                               {isMyLecture && (
                                 <button
