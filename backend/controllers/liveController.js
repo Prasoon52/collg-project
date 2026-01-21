@@ -128,19 +128,45 @@ export const getStreamToken = async (req, res) => {
 export const endLiveLecture = async (req, res) => {
   try {
     const { meetingId } = req.body;
-    const userId = req.userId; // Changed from req.user.id to req.userId
+    
+    if (!meetingId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Meeting ID is required" 
+      });
+    }
+    
+    console.log(`[End Lecture] Request received. Meeting ID: ${meetingId}, User ID: ${req.userId}`);
     
     const lecture = await LiveLecture.findOne({ meetingId });
     
     if (!lecture) {
-      return res.status(404).json({ success: false, message: "Lecture not found" });
+      console.log(`[End Lecture] Lecture not found: ${meetingId}`);
+      return res.status(404).json({ 
+        success: false, 
+        message: "Lecture not found" 
+      });
     }
     
+    console.log(`[End Lecture] Found lecture. Instructor ID: ${lecture.instructorId}, Request User ID: ${req.userId}`);
+    
     // Check if user is the instructor
-    if (!isInstructor(lecture, userId)) {
+    const isInstructor = lecture.instructorId.toString() === req.userId.toString();
+    
+    if (!isInstructor) {
+      console.log(`[End Lecture] Unauthorized: User ${req.userId} is not instructor ${lecture.instructorId}`);
       return res.status(403).json({ 
         success: false, 
         message: "Unauthorized. Only instructor can end the lecture" 
+      });
+    }
+    
+    // Check if lecture is already ended
+    if (!lecture.isActive) {
+      console.log(`[End Lecture] Lecture already ended: ${meetingId}`);
+      return res.status(400).json({ 
+        success: false, 
+        message: "Lecture has already ended" 
       });
     }
     
@@ -154,7 +180,7 @@ export const endLiveLecture = async (req, res) => {
       { new: true }
     );
     
-    console.log(`[End Lecture] Lecture ended: ${meetingId}`);
+    console.log(`[End Lecture] Successfully ended lecture: ${meetingId}`);
     
     res.status(200).json({ 
       success: true, 
@@ -163,7 +189,10 @@ export const endLiveLecture = async (req, res) => {
     });
   } catch (error) {
     console.error(`[End Lecture Error]:`, error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || "Error ending class" 
+    });
   }
 };
 
