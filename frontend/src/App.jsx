@@ -35,7 +35,8 @@ import LiveClassDashboard from './pages/LiveClassDashboard';
 import LiveRoom from './pages/LiveRoom'; 
 
 
-export const serverUrl = "http://localhost:8000"
+export const serverUrl = import.meta.env.VITE_BACKEND
+console.log(serverUrl);
 
 function App() {
   

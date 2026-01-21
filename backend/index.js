@@ -27,11 +27,13 @@ import summaryRouter from "./routes/summaryRoute.js"
 dotenv.config()
 
 let port = process.env.PORT
+let frontendUrl=process.env.FRONTEND_URL || "http://localhost:5173"
+
 let app = express()
 app.use(express.json())
 app.use(cookieParser())
 app.use(cors({
-    origin:"http://localhost:5173",
+    origin: frontendUrl,
     credentials:true
 }))
 app.use("/api/auth", authRouter)
