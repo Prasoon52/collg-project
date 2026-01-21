@@ -34,7 +34,7 @@ const isInstructor = (lecture, userId) => {
 export const createLiveLecture = async (req, res) => {
   try {
     const { courseId, topic, description, startTime, duration } = req.body;
-    const instructorId = req.userId; // Changed from req.user.id to req.userId
+    const instructorId = req.userId;
     const meetingId = `live-${courseId}-${Date.now()}`;
 
     console.log(`[Create Lecture] Creating lecture: ${meetingId}`);
@@ -82,7 +82,7 @@ export const getLectures = async (req, res) => {
 
 export const getStreamToken = async (req, res) => {
   try {
-    const userId = req.userId.toString(); // Changed from req.user.id to req.userId
+    const userId = req.userId.toString();
     
     // Check if Stream is configured
     if (!streamClient) {
@@ -118,7 +118,7 @@ export const getStreamToken = async (req, res) => {
       success: true, 
       token: "fallback-token-" + Date.now(),
       apiKey: "fallback-key",
-      userId: req.userId.toString(), // Changed from req.user.id to req.userId
+      userId: req.userId.toString(),
       mode: "fallback",
       message: "Using fallback mode due to Stream error."
     });
@@ -151,9 +151,9 @@ export const endLiveLecture = async (req, res) => {
     console.log(`[End Lecture] Found lecture. Instructor ID: ${lecture.instructorId}, Request User ID: ${req.userId}`);
     
     // Check if user is the instructor
-    const isInstructor = lecture.instructorId.toString() === req.userId.toString();
+    const isInstructorUser = lecture.instructorId.toString() === req.userId.toString();
     
-    if (!isInstructor) {
+    if (!isInstructorUser) {
       console.log(`[End Lecture] Unauthorized: User ${req.userId} is not instructor ${lecture.instructorId}`);
       return res.status(403).json({ 
         success: false, 
@@ -200,7 +200,7 @@ export const endLiveLecture = async (req, res) => {
 export const uploadRecording = async (req, res) => {
   try {
     const { meetingId } = req.body;
-    const userId = req.userId; // Changed from req.user.id to req.userId
+    const userId = req.userId;
     
     const lecture = await LiveLecture.findOne({ meetingId });
 
@@ -283,7 +283,7 @@ export const uploadRecording = async (req, res) => {
 export const updateRecording = async (req, res) => {
   try {
     const { meetingId } = req.body;
-    const userId = req.userId; // Changed from req.user.id to req.userId
+    const userId = req.userId;
     
     const lecture = await LiveLecture.findOne({ meetingId });
 
@@ -380,7 +380,7 @@ export const updateRecording = async (req, res) => {
 export const uploadNotes = async (req, res) => {
   try {
     const { meetingId } = req.body;
-    const userId = req.userId; // Changed from req.user.id to req.userId
+    const userId = req.userId;
     
     const lecture = await LiveLecture.findOne({ meetingId });
 
@@ -415,24 +415,29 @@ export const uploadNotes = async (req, res) => {
       });
     }
 
-    console.log(`[Upload Notes] Processing for: ${meetingId}`);
+    // Validate file type - Only allow PDF
+    const fileExt = path.extname(req.file.originalname).toLowerCase();
+    if (fileExt !== '.pdf') {
+      // Clean up uploaded file
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
+      return res.status(400).json({ 
+        success: false, 
+        message: "Only PDF files are allowed for notes" 
+      });
+    }
+
+    console.log(`[Upload Notes] Processing PDF for: ${meetingId}`);
 
     try {
-      // Determine resource type based on file extension
-      const fileExt = path.extname(req.file.originalname).toLowerCase();
-      let resourceType = 'raw';
-      if (['.jpg', '.jpeg', '.png', '.gif'].includes(fileExt)) {
-        resourceType = 'image';
-      } else if (['.pdf'].includes(fileExt)) {
-        resourceType = 'image';
-      }
-
-      // Upload to Cloudinary
+      // Upload PDF to Cloudinary with raw resource type
       const uploadResult = await cloudinary.uploader.upload(req.file.path, {
-        resource_type: resourceType,
+        resource_type: 'raw', // Use 'raw' for PDF files
         public_id: `notes_${lecture._id}_${Date.now()}`,
         folder: "lms_notes",
-        timeout: 60000
+        timeout: 60000,
+        type: 'upload'
       });
 
       // Update lecture with notes information
@@ -441,7 +446,8 @@ export const uploadNotes = async (req, res) => {
         name: req.file.originalname,
         size: req.file.size,
         type: req.file.mimetype,
-        uploadedAt: new Date()
+        uploadedAt: new Date(),
+        publicId: uploadResult.public_id
       };
       await lecture.save();
 
@@ -474,7 +480,6 @@ export const uploadNotes = async (req, res) => {
 };
 
 // === DOWNLOAD NOTES FUNCTION ===
-
 export const downloadNotes = async (req, res) => {
   try {
     const { meetingId } = req.params;
@@ -490,32 +495,60 @@ export const downloadNotes = async (req, res) => {
     console.log(`[Download Notes] Processing for: ${meetingId}`);
 
     const fileUrl = lecture.notes.url;
+    
+    // If it's a Cloudinary URL, we can add flags to force download
+    if (fileUrl.includes('cloudinary.com')) {
+      // For PDF files on Cloudinary, add the 'fl_attachment' flag to force download
+      let downloadUrl = fileUrl;
+      
+      // Check if it's already a transformed URL
+      if (!fileUrl.includes('/fl_attachment')) {
+        // Insert the flag before the filename
+        const parts = fileUrl.split('/upload/');
+        if (parts.length === 2) {
+          downloadUrl = `${parts[0]}/upload/fl_attachment/${parts[1]}`;
+        }
+      }
+      
+      // Redirect to Cloudinary URL with attachment flag
+      return res.redirect(downloadUrl);
+    } else {
+      // For non-Cloudinary URLs, use the proxy method
+      const response = await axios({
+        method: "GET",
+        url: fileUrl,
+        responseType: "stream",
+      });
 
-    const response = await axios({
-      method: "GET",
-      url: fileUrl,
-      responseType: "stream",
-    });
+      // Get filename from notes or use a default
+      let fileName = lecture.notes.name || "Lecture_Notes";
+      
+      // Ensure filename has .pdf extension
+      if (!fileName.toLowerCase().endsWith('.pdf')) {
+        fileName += '.pdf';
+      }
 
-    let baseName = lecture.notes.name || "Lecture_Notes";
+      // Sanitize filename
+      fileName = fileName.replace(/[^a-zA-Z0-9-_. ]/g, "").trim();
 
-    baseName = baseName.replace(/[^a-zA-Z0-9-_ ]/g, "").trim();
+      // Set headers for PDF download
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${fileName}"`
+      );
+      res.setHeader("Content-Type", "application/pdf");
 
-
-    const finalFileName = `${baseName}.pdf`;
-
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${finalFileName}"; filename*=UTF-8''${encodeURIComponent(finalFileName)}`,
-    );
-    res.setHeader("Content-Type", "application/pdf");
-
-    response.data.pipe(res);
-  } 
-  catch (error) {
+      response.data.pipe(res);
+    }
+  } catch (error) {
     console.error(`[Download Notes Error]:`, error.message);
 
     if (!res.headersSent) {
+      // Try direct redirect as fallback
+      if (lecture?.notes?.url) {
+        return res.redirect(lecture.notes.url);
+      }
+      
       res.status(500).json({
         success: false,
         message: "Failed to download notes",
@@ -528,7 +561,7 @@ export const downloadNotes = async (req, res) => {
 export const deleteNotes = async (req, res) => {
   try {
     const { meetingId } = req.body;
-    const userId = req.userId; // Changed from req.user.id to req.userId
+    const userId = req.userId;
     
     const lecture = await LiveLecture.findOne({ meetingId });
 
@@ -559,7 +592,7 @@ export const deleteNotes = async (req, res) => {
     // Delete file from Cloudinary
     try {
       const publicId = lecture.notes.url.split('/').pop().split('.')[0];
-      await cloudinary.uploader.destroy(`lms_notes/${publicId}`);
+      await cloudinary.uploader.destroy(`lms_notes/${publicId}`, { resource_type: 'raw' });
     } catch (deleteError) {
       console.warn(`[Delete Notes] Could not delete from Cloudinary:`, deleteError);
     }
@@ -585,7 +618,7 @@ export const deleteNotes = async (req, res) => {
 // === GET ALL LECTURES (with instructor check) ===
 export const getAllLectures = async (req, res) => {
   try {
-    const userId = req.userId; // Changed from req.user.id to req.userId
+    const userId = req.userId;
     
     const lectures = await LiveLecture.find()
       .populate('courseId', 'title thumbnail')
@@ -612,7 +645,7 @@ export const getAllLectures = async (req, res) => {
 // === GET MY LECTURES (only instructor's lectures) ===
 export const getMyLectures = async (req, res) => {
   try {
-    const userId = req.userId; // Changed from req.user.id to req.userId
+    const userId = req.userId;
     
     const lectures = await LiveLecture.find({ instructorId: userId })
       .populate('courseId', 'title thumbnail')
