@@ -4,6 +4,13 @@ A full‑stack **Learning Management System (LMS)** built to support teachers an
 
 ---
 
+## 🌐 Live Demo
+
+🚀 **Deployed Website:**  
+👉 https://lms-by-tle-terminator.vercel.app/
+
+---
+
 ## 🚀 Overview
 
 LMS by TLE Terminator is a modern web platform that enables:
@@ -57,6 +64,16 @@ The platform aims to bridge the gap between teaching plans and classroom executi
 * Computer vision–based attention analysis microservice
 * Processes image frames via API and returns head/gaze/face confidence scores
 * Integrates with live lectures to estimate student attentiveness
+
+### 🧠 AI Summary Generator (New Feature)
+
+The **AI Summary Generator** automatically creates **concise, structured summaries per lecture** by processing the **audio of the lecture**.
+
+- 🎧 Converts lecture audio → text  
+- 🧠 Generates an AI-based summary for that specific lecture  
+- 📌 Stores summaries lecture-wise for quick revision  
+
+This enables students to revise faster and allows teachers to provide instant, high-quality recap material with zero manual effort.
 
 ---
 
@@ -210,24 +227,20 @@ Built by **TLE Terminator** — focused on impact, usability, and system‑level
 Contributions are welcome. Suggested workflow:
 
 1. Fork the repo
-2. Create a feature branch (`git checkout -b feature/your-feature`)
-3. Commit your changes (`git commit -m "feat: add ..."`)
-4. Push and open a pull request
+3. Create a feature branch (`git checkout -b feature/your-feature`)
+4. Commit your changes (`git commit -m "feat: add ..."`)
+5. Push and open a pull request
 
 Please follow the existing code style (ESLint/Prettier if configured) and include meaningful commit messages.
 
 ---
 
-## 📄 License
-
-This project is intended for educational and hackathon use. Add an appropriate open source license (e.g., MIT) in the `LICENSE` file if you plan to publish or share publicly.
-
----
-
 ## ✅ Contact
 
-For questions or support, open an issue in the repository or contact the project maintainers on the repo.
+1. Prasson Patel
+2. Abhinav Neema
+3. Pranav
+4. Abhas Nath
 
 ---
 
-*Generated README for the LMS by TLE Terminator — tailored for hackathons, prototyping, and early production testing.*
