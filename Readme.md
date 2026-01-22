@@ -218,16 +218,11 @@ Please follow the existing code style (ESLint/Prettier if configured) and includ
 
 ---
 
-## 📄 License
-
-This project is intended for educational and hackathon use. Add an appropriate open source license (e.g., MIT) in the `LICENSE` file if you plan to publish or share publicly.
-
----
-
 ## ✅ Contact
 
-For questions or support, open an issue in the repository or contact the project maintainers on the repo.
-
+Prasson Patel
+Abhinav Neema
+Pranav
+Abhas Nath
 ---
 
-*Generated README for the LMS by TLE Terminator — tailored for hackathons, prototyping, and early production testing.*
