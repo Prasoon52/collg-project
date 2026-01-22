@@ -58,6 +58,16 @@ The platform aims to bridge the gap between teaching plans and classroom executi
 * Processes image frames via API and returns head/gaze/face confidence scores
 * Integrates with live lectures to estimate student attentiveness
 
+### 🧠 AI Summary Generator (New Feature)
+
+The **AI Summary Generator** automatically creates **concise, structured summaries per lecture** by processing the **audio of the lecture**.
+
+- 🎧 Converts lecture audio → text  
+- 🧠 Generates an AI-based summary for that specific lecture  
+- 📌 Stores summaries lecture-wise for quick revision  
+
+This enables students to revise faster and allows teachers to provide instant, high-quality recap material with zero manual effort.
+
 ---
 
 ## 🏗️ High‑Level Architecture
