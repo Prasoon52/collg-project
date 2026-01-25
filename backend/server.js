@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import connectDb from "./configs/db.js";
 import paymentRouter from "./routes/paymentRoute.js";
 import authRouter from './routes/authRoute.js'
+import reviewRouter from "./routes/reviewRoute.js";
 
 dotenv.config();
 
@@ -21,6 +22,7 @@ app.use(
 );
 app.use("/api/auth", authRouter);
 app.use("/api/payment", paymentRouter);
+app.use("/api/review", reviewRouter)
 
 app.listen(port, async () => {
   await connectDb();
