@@ -82,6 +82,15 @@ The **AI Summary Generator** automatically creates **concise, structured summari
 
 This enables students to revise faster and allows teachers to provide instant, high-quality recap material with zero manual effort.
 
+
+### 📏 Stem Learning Module
+
+* Dedicated STEM learning section with interactive quizes and experiments
+* Ask any doubt feature powered by AI
+* Separate frontend and backend services for modularity
+
+This module is designed to enhance STEM education by providing interactive content and AI assistance specifically tailored for science, technology, engineering, and mathematics subjects.
+
 ---
 
 ## 🏗️ High‑Level Architecture
@@ -112,6 +121,12 @@ This enables students to revise faster and allows teachers to provide instant, h
 * Python + Flask
 * OpenCV + MediaPipe
 * Deployed as a separate microservice
+
+**Stem Learning**
+* React + Vite frontend for STEM frontend
+* Node.js + Express backend for STEM learning
+* Dedicated MongoDB collections for STEM courses and progress tracking
+* Deployed as separate frontend and backend services
 
 ---
 
@@ -159,7 +174,7 @@ npm install
 npm run dev
 ```
 
-> frontend dev server typically runs on `localhost:5173` or as specified by Vite.
+> LMS frontend dev server typically runs on `localhost:5173` and STEM frontend on `localhost:3000`.
 
 ### 4. Attention Engine (Optional setup for focusing monitoring)
 
@@ -174,6 +189,28 @@ python app.py
 ```
 
 > Attention Engine runs as a separate microservice (Flask). Configure frontend/backend to call the attention API endpoint when enabled.
+
+### 5. Stem Learning Module
+- Backend Setup
+
+```bash
+cd ../stem-backend
+cp .env.example .env # Create your own .env and add required secrets
+npm install
+npm run dev
+```
+> STEM backend will typically runs on port `5001` depending on configuration.
+
+- Frontend Setup
+
+```bash
+cd ../stem-frontend
+cp .env.example .env # Create your own .env and add required secrets
+npm install
+npm run dev
+```
+
+> STEM frontend dev server typically runs on `localhost:3000`.
 
 ---
 
@@ -221,6 +258,8 @@ Built by **TLE Terminator** — focused on impact, usability, and system‑level
 * Parent & mentor views
 * Automated attendance & engagement insights
 * Integration with government education systems
+* Duals for Quiz assessments
+* Gamification of Quiz elements 
 
 ---
 
