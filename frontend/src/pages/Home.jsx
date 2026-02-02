@@ -259,7 +259,7 @@ function Home() {
   const { courseData } = useSelector((state) => state.course);
   const { userData } = useSelector((state) => state.user);
 
-  const stem_url = import.meta.env.STEM_URL || "http://localhost:3000";
+  const stem_url = import.meta.env.VITE_STEM_URL || "http://localhost:3000";
 
   const featuredCourses = courseData?.slice(0, 3) || [];
 
@@ -295,7 +295,7 @@ function Home() {
   return (
     <div className="bg-[#f8fafc] overflow-x-hidden font-sans">
       {/* ================= HERO SECTION ================= */}
-      <section className="relative h-screen min-h-[600px] flex flex-col">
+      <section className="relative h-screen md:h-screen flex flex-col">
         <Nav />
 
         {/* Background Image & Gradient */}
@@ -347,7 +347,7 @@ function Home() {
               </button>
 
               <button
-                onClick={() => navigate(stem_url)}
+                onClick={() => (window.location.href = stem_url)}
                 className="px-8 py-4 rounded-2xl bg-yellow-200 text-slate-900 font-bold text-lg hover:bg-blue-50 transition-all flex items-center justify-center gap-2 shadow-xl shadow-white/10 group">
                 <SiViaplay className="text-red-600 group-hover:scale-110 transition-transform" />
                 TryOut STEM Challenges
@@ -371,12 +371,12 @@ function Home() {
 
       {/* ================= USER PROGRESS (Floating Card) ================= */}
       {userData && (
-        <section className="relative -mt-24 z-20 px-6 max-w-7xl mx-auto">
+        <section className="relative mt-8 md:-mt-24 z-20 px-6 max-w-7xl mx-auto">
           <motion.div
             initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.5, duration: 0.7 }}
-            className="bg-white/90 backdrop-blur-xl rounded-[2.5rem] p-8 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.3)] border border-white flex flex-col md:flex-row items-center justify-between gap-8">
+            className="bg-white/90 backdrop-blur-xl rounded-[2.5rem] p-8 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.3)] border border-white flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
             {/* Rank Info */}
             <div className="flex items-center gap-6 w-full md:w-auto">
               <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center shadow-lg shadow-blue-500/30 text-white text-3xl">
@@ -424,12 +424,12 @@ function Home() {
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-12 gap-12 items-start">
             {/* Left Text */}
-            <div className="lg:col-span-4 space-y-8 sticky top-24">
+            <div className="lg:col-span-4 space-y-8 lg:sticky lg:top-24">
               <div>
                 <span className="text-blue-600 font-bold tracking-widest text-sm uppercase mb-2 block">
                   Competition
                 </span>
-                <h2 className="text-4xl md:text-5xl font-black text-slate-900 leading-tight">
+                <h2 className="text-4xl sm:text-5xl md:text-7xl font-black text-slate-900 leading-tight">
                   Hall of{" "}
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-orange-600">
                     Fame

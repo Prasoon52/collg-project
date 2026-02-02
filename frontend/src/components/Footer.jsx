@@ -69,7 +69,7 @@ import { motion } from "framer-motion";
 const Footer = () => {
   let navigate = useNavigate();
 
-  const stem_url = import.meta.env.STEM_URL || "http://localhost:3000";
+  const stem_url = import.meta.env.VITE_STEM_URL || "http://localhost:3000";
 
   return (
     <footer className="relative bg-[#0f172a] text-slate-300 border-t border-white/5 overflow-hidden font-sans">
@@ -149,7 +149,7 @@ const Footer = () => {
             </h3>
             <ul className="space-y-3">
               <FooterLink text="STEM Challenges" 
-              onClick={()=>navigate(stem_url)}/>
+              onClick={()=>window.location.href=stem_url}/>
               <FooterLink
                 text="AI Career Path"
                 onClick={() => navigate("/career")}
